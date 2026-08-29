@@ -564,6 +564,19 @@ for professional translation project planning.
 Your analysis must be THOROUGH, SPECIFIC, and GROUNDED in the actual document content.
 Every claim must be supported by evidence from the text.
 
+*** CONSISTENCY & DETERMINISM (reduce run-to-run drift) ***
+Classify strictly from measurable content, never impression — the SAME document must
+yield the SAME analysis on repeated runs. Specifically:
+- DOMAIN BREAKDOWN: rank domains by the share of actual string/content VOLUME they
+  occupy; the #1 domain MUST be the one covering the largest portion of the text.
+  Round every percentage to the nearest 5%. Do not reshuffle the ranking based on
+  secondary or incidental details.
+- FORMATTING IMPACT and DIFFICULTY: derive the score from the concrete structure and
+  content, not a general impression; identical structure and content ⇒ identical score.
+- COUNTRIES/LOCALES: report only those explicitly present in the text; never add
+  plausible-but-unseen ones.
+- PRICE FACTOR: compute it the same way every time from difficulty and content type.
+
 {structure_warning}
 
 *** TAXONOMY RULES (STRICT) ***
