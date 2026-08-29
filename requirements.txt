@@ -9,4 +9,3 @@ openpyxl>=3.0.0
 python-pptx>=0.6.21
 
 python-dotenv>=1.0.0
-firebase-admin
