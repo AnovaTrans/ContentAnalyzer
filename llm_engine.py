@@ -18,14 +18,26 @@ from models import DocumentAnalysis
 from config_data import MASTER_TAXONOMY
 
 
+def _response_text(response) -> str:
+    """Concatenate text blocks of a Messages response, skipping thinking blocks.
+    Current models (Sonnet 5, Opus 4.7+) return a ThinkingBlock first, so
+    response.content[0].text raises 'ThinkingBlock has no attribute text'."""
+    parts = []
+    for block in getattr(response, "content", None) or []:
+        if getattr(block, "type", "") == "text":
+            parts.append(getattr(block, "text", "") or "")
+    return "".join(parts).strip()
+
+
 class LLMEngine:
     """Anthropic Claude API ile doküman analizi yapan motor."""
 
-    # Current-gen models in priority order
+    # Current-gen models in priority order (fallbacks; the UI-selected model,
+    # when set, is tried first — see __init__).
     CLAUDE_MODELS = [
-        "claude-sonnet-4-6",              # Primary — best price/performance, 1M context
-        "claude-opus-4-6",                 # Premium fallback
-        "claude-haiku-4-5-20251001",       # Budget fallback
+        "claude-sonnet-4-6",   # Primary — best price/performance, 1M context
+        "claude-opus-4-6",     # Premium fallback
+        "claude-haiku-4-5",    # Budget fallback (bare id — no date suffix)
     ]
 
     # ── Detail level tiers ──────────────────────────────────
@@ -78,10 +90,15 @@ class LLMEngine:
         },
     }
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: Optional[str] = None):
         self.api_key = api_key
         self.client = Anthropic(api_key=self.api_key)
-        print("LLM Engine initialized with Anthropic Claude (Sonnet 4.6)")
+        # UI-selected model is tried first; the rest stay as fallbacks.
+        if model:
+            self.models = [model] + [m for m in self.CLAUDE_MODELS if m != model]
+        else:
+            self.models = list(self.CLAUDE_MODELS)
+        print(f"LLM Engine initialized with Anthropic Claude ({self.models[0]})")
 
     def analyze_document(
         self,
@@ -357,7 +374,7 @@ OUTPUT JSON SCHEMA:
         print("Attempting Claude models...")
         last_error = None
 
-        for model_id in self.CLAUDE_MODELS:
+        for model_id in self.models:
             for attempt in range(3):
                 try:
                     print(f"  Trying: {model_id} (attempt {attempt+1})")
@@ -379,10 +396,9 @@ OUTPUT JSON SCHEMA:
                         max_tokens=max_tokens,
                         system=sys_msg,
                         messages=[{"role": "user", "content": user_msg}],
-                        temperature=0.0
                     )
 
-                    content = response.content[0].text if response.content else ""
+                    content = _response_text(response)
 
                     if not content or not content.strip():
                         print(f"  Warning: {model_id} returned empty response")

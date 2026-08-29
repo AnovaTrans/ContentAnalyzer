@@ -14,6 +14,7 @@ import json
 # Backend Mantığı
 from extractors import FileExtractor, chunk_text
 from llm_engine import LLMEngine
+from model_utils import list_model_ids, default_model, FALLBACK_MODELS
 from reporters import ReportGenerator
 from config_data import calculate_blended_price_factor
 from models import FinancialEstimates
@@ -85,7 +86,7 @@ def display_dashboard(model, out_dir, original_filename):
         with open(json_path, "rb") as f:
             col2.download_button("📋 Download Data (JSON)", f, file_name=json_path.name)
 
-def run_analysis_pipeline(file_path: str, api_key: str, detail_level: str = "comprehensive"):
+def run_analysis_pipeline(file_path: str, api_key: str, detail_level: str = "comprehensive", model: str = None):
     # ... (Mevcut pipeline kodlarınız aynı kalıyor) ...
     status_text = st.empty()
     main_progress_bar = st.progress(0)
@@ -105,7 +106,7 @@ def run_analysis_pipeline(file_path: str, api_key: str, detail_level: str = "com
 
     try:
         update_progress(2, "Initializing Claude Engine...")
-        llm = LLMEngine(api_key)
+        llm = LLMEngine(api_key, model=model)
 
         update_progress(5, "Extracting text and structure...")
         extractor = FileExtractor(file_path)
@@ -220,9 +221,24 @@ with st.sidebar:
         selected_detail_level = "basic"
 
     st.markdown("---")
-    st.markdown("### 🤖 AI Models")
-    st.markdown("**Primary:** Claude Sonnet 4.6 (1M context)")
-    st.markdown("**Fallback:** Opus 4.6 → Haiku 4.5")
+    st.markdown("### 🤖 Model")
+    # Live model list from the account (fetched on load, refreshable). The
+    # selection is tried first; the engine falls back to Opus 4.6 / Haiku 4.5.
+    selected_model = None
+    if api_key:
+        if st.button("🔄 Refresh model list") or "model_ids" not in st.session_state:
+            st.session_state.model_ids = list_model_ids(api_key)
+        ids = st.session_state.get("model_ids") or FALLBACK_MODELS
+        if not st.session_state.get("model_ids"):
+            st.caption("Live model list unavailable — showing current defaults.")
+        dflt = default_model(ids)
+        selected_model = st.selectbox(
+            "Model", ids,
+            index=ids.index(dflt) if dflt in ids else 0,
+            help="Fetched live from your account. Falls back to Opus 4.6 / Haiku 4.5 on error.",
+        )
+    else:
+        st.caption("Add the API key to choose a model.")
 
 # ---------------------------------------------------------
 # MAIN CONTENT
@@ -240,7 +256,7 @@ if uploaded_file:
         else:
             file_path = save_uploaded_file(uploaded_file)
             if file_path:
-                result = run_analysis_pipeline(file_path, api_key, detail_level=selected_detail_level)
+                result = run_analysis_pipeline(file_path, api_key, detail_level=selected_detail_level, model=selected_model)
                 if result:
                     display_dashboard(*result)
 else:
