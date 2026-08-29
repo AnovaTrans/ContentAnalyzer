@@ -139,10 +139,9 @@ class FileExtractor:
         return ""
 
 # --- Missing Function Restored ---
-def chunk_text(text: str, max_chars: int = 200000, overlap: int = 5000) -> List[str]:
-    """Chunks text for LLM context windows.
-    Set to 200K chars (~50K tokens) to leverage Sonnet 4.6's 1M context window.
-    Most documents will fit in a single chunk, eliminating synthesis quality loss."""
+def chunk_text(text: str, max_chars: int = 80000, overlap: int = 2000) -> List[str]:
+    """Chunks text for LLM context windows. 
+    Increased to 80K chars to reduce API calls while staying within model limits."""
     if not text:
         return []
     

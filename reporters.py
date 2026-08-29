@@ -1,36 +1,19 @@
-"""
-Report Generator — Enhanced DOCX Output
-=========================================
-Professional formatting with tables, color-coded risks,
-Anova branding, and comprehensive section coverage.
-"""
-
 import os
 import json
 from datetime import datetime
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches, Cm, Emu
+from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml.ns import qn
 from models import DocumentAnalysis
-
-# Anova brand colors
-CHARCOAL = RGBColor(0x3A, 0x3A, 0x3A)
-CORAL = RGBColor(0xE8, 0x5C, 0x4A)
-TEAL = RGBColor(0x4E, 0xCD, 0xC4)
-DARK_GREEN = RGBColor(0x00, 0x64, 0x00)
-AMBER = RGBColor(0xF7, 0x93, 0x1E)
-RED = RGBColor(0xC8, 0x00, 0x00)
-WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-
 
 class ReportGenerator:
     def __init__(self, analysis: DocumentAnalysis, output_dir: str):
         self.analysis = analysis
         self.output_dir = output_dir
+        # Base name without extension
         raw_name = self.analysis.document_names[0]
         self.base_name = os.path.splitext(raw_name)[0].replace('.', '_').replace(' ', '_')
+        # Timestamp format: YYYYMMDD_HHMMSS
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -42,358 +25,129 @@ class ReportGenerator:
         print(f"Generated: {file_path}")
 
     def generate_docx(self):
-        file_path = os.path.join(
-            self.output_dir, f"{self.base_name}_{self.timestamp}_analysis_report.docx"
-        )
+        file_path = os.path.join(self.output_dir, f"{self.base_name}_{self.timestamp}_analysis_report.docx")
         doc = Document()
-
-        # ── Set default style ──
         style = doc.styles['Normal']
         style.font.name = 'Calibri'
         style.font.size = Pt(11)
-        style.font.color.rgb = CHARCOAL
 
-        # ── Helpers ──
-        def add_kv(label, value, doc_obj=doc):
-            p = doc_obj.add_paragraph()
+        # Header
+        title = doc.add_heading(f"Enterprise Document Analysis", 0)
+        title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        doc.add_paragraph(f"File: {self.base_name} | Date: {self.analysis.analysis_date}").alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        doc.add_paragraph("---")
+
+        def add_kv(label, value):
+            p = doc.add_paragraph()
             p.add_run(f"{label}: ").bold = True
             p.add_run(str(value))
 
-        def add_list_items(items, doc_obj=doc):
-            if not items:
-                return
-            for item in items:
-                doc_obj.add_paragraph(str(item), style='List Bullet')
+        def add_list_simple(items):
+            if not items: return
+            for item in items: doc.add_paragraph(str(item), style='List Bullet')
 
-        def add_colored_heading(text, level=1):
-            h = doc.add_heading(text, level=level)
-            for run in h.runs:
-                run.font.color.rgb = CHARCOAL
-            return h
-
-        def add_simple_table(headers, rows, col_widths=None):
-            """Create a formatted table with header row."""
-            table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-            table.style = 'Table Grid'
-            table.alignment = WD_TABLE_ALIGNMENT.CENTER
-
-            # Header row
-            for i, header in enumerate(headers):
-                cell = table.rows[0].cells[i]
-                p = cell.paragraphs[0]
-                p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                run = p.add_run(header)
-                run.bold = True
-                run.font.size = Pt(10)
-                run.font.color.rgb = WHITE
-                # Dark background for header
-                shading = cell._element.get_or_add_tcPr()
-                shading_elem = shading.makeelement(qn('w:shd'), {
-                    qn('w:fill'): '3A3A3A',
-                    qn('w:val'): 'clear',
-                })
-                shading.append(shading_elem)
-
-            # Data rows
-            for row_idx, row_data in enumerate(rows):
-                for col_idx, cell_text in enumerate(row_data):
-                    cell = table.rows[row_idx + 1].cells[col_idx]
-                    p = cell.paragraphs[0]
-                    run = p.add_run(str(cell_text))
-                    run.font.size = Pt(10)
-
-            if col_widths:
-                for i, width in enumerate(col_widths):
-                    for row in table.rows:
-                        row.cells[i].width = Inches(width)
-
-            return table
-
-        # ════════════════════════════════════════════════════
-        # TITLE & HEADER
-        # ════════════════════════════════════════════════════
-        title = doc.add_heading("Enterprise Document Analysis", 0)
-        title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        for run in title.runs:
-            run.font.color.rgb = CHARCOAL
-
-        # Subtitle line
-        subtitle = doc.add_paragraph()
-        subtitle.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        run = subtitle.add_run(f"File: {self.base_name}")
-        run.bold = True
-        run.font.size = Pt(12)
-        subtitle.add_run(f"  |  Date: {self.analysis.analysis_date}")
-        subtitle.add_run(f"  |  Analyzed by: {self.analysis.analyzed_by}")
-
-        # Anova attribution
-        attr = doc.add_paragraph()
-        attr.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        run = attr.add_run("Generated by AICONTEXT Content Analyzer | Anova Translation")
-        run.font.size = Pt(9)
-        run.font.color.rgb = TEAL
-        run.italic = True
-
-        doc.add_paragraph("─" * 60).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-        # ════════════════════════════════════════════════════
-        # EXECUTIVE SUMMARY BOX
-        # ════════════════════════════════════════════════════
-        if self.analysis.pm_notes:
-            add_colored_heading("Executive Summary", level=1)
-            summary_table = doc.add_table(rows=1, cols=1)
-            summary_table.style = 'Table Grid'
-            cell = summary_table.cell(0, 0)
-            # Light teal background
-            shading = cell._element.get_or_add_tcPr()
-            shading_elem = shading.makeelement(qn('w:shd'), {
-                qn('w:fill'): 'E8F8F5',
-                qn('w:val'): 'clear',
-            })
-            shading.append(shading_elem)
-            p = cell.paragraphs[0]
-            run = p.add_run(self.analysis.pm_notes.executive_summary)
-            run.font.size = Pt(11)
-
-        # ════════════════════════════════════════════════════
-        # 1. EXECUTIVE CONTEXT
-        # ════════════════════════════════════════════════════
-        add_colored_heading("1. Executive Context", level=1)
+        # 1. Summary & Corporate
+        doc.add_heading("1. Executive Context", level=1)
         doc.add_paragraph(self.analysis.high_level_description)
-
         corp = self.analysis.corporate_context
-        add_kv("Primary Company", corp.primary_company)
         if corp.parent_company_or_group:
-            add_kv("Corporate Hierarchy", f"{corp.primary_company} > {corp.parent_company_or_group}")
-        add_kv("Brand Consistency", corp.brand_consistency_notes)
-
-        if self.analysis.entities_detected:
             p = doc.add_paragraph()
-            p.add_run("Named Entities: ").bold = True
-            p.add_run(", ".join(self.analysis.entities_detected[:20]))
+            p.add_run("🏢 Hierarchy: ").bold = True
+            p.add_run(f"{corp.primary_company} ➤ {corp.parent_company_or_group}")
+            
+            p_brand = doc.add_paragraph()
+            run_brand = p_brand.add_run(f"⚠️ Brand: {corp.brand_consistency_notes}")
+            run_brand.font.color.rgb = RGBColor(200, 0, 0)
 
-        # ════════════════════════════════════════════════════
-        # 2. DOCUMENT COMPONENTS
-        # ════════════════════════════════════════════════════
-        add_colored_heading("2. Document Components & Structure", level=1)
+        # 2. Component Analysis
+        doc.add_heading("2. Document Components & Structure", level=1)
         comp = self.analysis.component_analysis
-        add_simple_table(
-            ["Component", "Details"],
-            [
-                ["Text Volume", comp.text_volume_summary],
-                ["Visual Elements", comp.visual_elements_summary],
-                ["Data Tables", comp.data_tables_summary],
-                ["OCR Requirements", comp.ocr_requirements],
-                ["Formatting Impact", f"{comp.formatting_impact_score}/10"],
-            ],
-            col_widths=[2.0, 4.5],
-        )
+        add_kv("Text Volume", comp.text_volume_summary)
+        add_kv("Visuals", comp.visual_elements_summary)
+        add_kv("Tables", comp.data_tables_summary)
+        add_kv("OCR Needs", comp.ocr_requirements)
+        add_kv("Formatting Impact", f"{comp.formatting_impact_score}/10")
 
-        # ════════════════════════════════════════════════════
-        # 3. DOMAIN BREAKDOWN
-        # ════════════════════════════════════════════════════
-        add_colored_heading("3. Domain Composition", level=1)
-        domain_rows = [
-            [f"{share.percentage}%", share.domain, share.justification]
-            for share in self.analysis.domain_breakdown
-        ]
-        if domain_rows:
-            add_simple_table(
-                ["Share", "Domain", "Justification"],
-                domain_rows,
-                col_widths=[0.8, 2.2, 3.5],
-            )
+        # 3. Domain Breakdown
+        doc.add_heading("3. Domain Composition", level=1)
+        for share in self.analysis.domain_breakdown:
+            p = doc.add_paragraph()
+            p.add_run(f"{share.percentage}% {share.domain}").bold = True
+            p.add_run(f" - {share.justification}")
 
-        # ════════════════════════════════════════════════════
-        # 4. COMMERCIAL ESTIMATION
-        # ════════════════════════════════════════════════════
+        # 4. Financials (Green Box)
         if self.analysis.financial_metrics:
-            add_colored_heading("4. Commercial Estimation", level=1)
+            doc.add_heading("Commercial Estimation", level=1)
             fin = self.analysis.financial_metrics
-
-            # Price factor box
-            price_table = doc.add_table(rows=1, cols=1)
-            price_table.style = 'Table Grid'
-            cell = price_table.cell(0, 0)
-
+            table = doc.add_table(rows=1, cols=1)
+            table.style = 'Table Grid'
+            cell = table.cell(0, 0)
+            
             p = cell.paragraphs[0]
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             runner = p.add_run(f"PRICE FACTOR: {fin.suggested_price_factor}x")
             runner.bold = True
-            runner.font.size = Pt(18)
-            runner.font.color.rgb = DARK_GREEN
-
-            p_expl = cell.add_paragraph()
+            runner.font.size = Pt(16)
+            runner.font.color.rgb = RGBColor(0, 100, 0)
+            
+            p_expl = cell.add_paragraph(f"Base Calculation: {fin.explanation}")
             p_expl.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            p_expl.add_run(f"Base Calculation: {fin.explanation}").font.size = Pt(10)
-
+            
             if fin.component_impact_breakdown:
                 p_drivers = cell.add_paragraph()
                 p_drivers.add_run("Cost Drivers:").bold = True
                 for item in fin.component_impact_breakdown:
-                    p_item = cell.add_paragraph(f"  • {item}")
-                    p_item.paragraph_format.space_after = Pt(2)
+                    cell.add_paragraph(f"• {item}")
 
-        # ════════════════════════════════════════════════════
-        # 5. TECHNICAL PROTOCOLS
-        # ════════════════════════════════════════════════════
-        add_colored_heading("5. Technical Protocols", level=1)
+        # 5. Measurements & Protocols (NEW FIXED SECTION)
+        doc.add_heading("4. Technical Protocols", level=1)
         meas = self.analysis.measurement_rules
-        add_simple_table(
-            ["Rule Type", "Specification"],
-            [
-                ["Decimal Format", meas.decimal_format_rule],
-                ["Unit Conversion", meas.unit_conversion_rule],
-            ],
-            col_widths=[2.0, 4.5],
-        )
+        add_kv("Decimal Format", meas.decimal_format_rule)
+        add_kv("Unit Conversion", meas.unit_conversion_rule)
+        
+        doc.add_heading("Critical Numbers Identified", level=3)
+        add_list_simple(meas.critical_measurements_list)
 
-        if meas.critical_measurements_list:
-            doc.add_heading("Critical Numbers Identified", level=3)
-            add_list_items(meas.critical_measurements_list)
-
-        # ════════════════════════════════════════════════════
-        # 6. LOCALIZATION STRATEGY
-        # ════════════════════════════════════════════════════
-        add_colored_heading("6. Localization Strategy", level=1)
+        # 6. Localization Strategy (NEW SECTION)
+        doc.add_heading("5. Localization Strategy", level=1)
         loc = self.analysis.localization_strategy
         add_kv("Cultural Adaptation", loc.cultural_adaptation_notes)
         add_kv("Geographic Handling", loc.geographic_handling)
-        add_kv("Tone & Style Guide", loc.tone_and_style_guide)
+        add_kv("Tone Guide", loc.tone_and_style_guide)
 
-        # ════════════════════════════════════════════════════
-        # 7. TERMINOLOGY
-        # ════════════════════════════════════════════════════
-        add_colored_heading("7. Terminology & Resources", level=1)
-        terms = self.analysis.terminology_and_resources
-        add_kv("Glossary Status", terms.glossary_status)
+        # 7. Terminology (EXPANDED)
+        doc.add_heading("6. Terminology", level=1)
+        terms = self.analysis.terminology_and_resources.categorized_terms
+        for category, t_list in terms.items():
+            p = doc.add_paragraph()
+            p.add_run(f"{category}: ").bold = True
+            p.add_run(", ".join(t_list))
 
-        if terms.categorized_terms:
-            term_rows = []
-            for category, t_list in terms.categorized_terms.items():
-                term_rows.append([category, ", ".join(t_list[:15])])
-            if term_rows:
-                add_simple_table(
-                    ["Category", "Terms"],
-                    term_rows,
-                    col_widths=[2.0, 4.5],
-                )
-
-        # ════════════════════════════════════════════════════
-        # 8. DOCUMENT PROFILE & DIFFICULTY
-        # ════════════════════════════════════════════════════
-        add_colored_heading("8. Document Profile & Difficulty", level=1)
-        prof = self.analysis.doc_profile
-        add_kv("Document Type", prof.document_type)
-        add_kv("Target Audiences", ", ".join(prof.target_audience_groups))
-        add_kv("Reading Level", prof.reading_level)
-
-        diff = self.analysis.difficulty_complexity
-        add_kv("Overall Difficulty", f"{diff.overall_difficulty_level}/10")
-        add_kv("Terminology Count", diff.drivers.terminology_count)
-        add_kv("Technical Density", diff.drivers.technical_density_score)
-        add_kv("Regulatory Constraints", diff.drivers.regulatory_constraints)
-        if diff.drivers.formatting_complexity:
-            add_kv("Formatting Complexity", diff.drivers.formatting_complexity)
-
-        # ════════════════════════════════════════════════════
-        # 9. RESOURCE QUALIFICATIONS
-        # ════════════════════════════════════════════════════
-        add_colored_heading("9. Resource Qualifications", level=1)
+        # 8. Resource Requirements
+        doc.add_heading("7. Resource Qualifications", level=1)
         res = self.analysis.recommended_resources
-        add_simple_table(
-            ["Requirement", "Specification"],
-            [
-                ["Profile", res.headline_profile],
-                ["Seniority", res.seniority_level],
-                ["Min Experience", f"{res.min_years_experience} Years"],
-                ["Education", res.education_requirement],
-                ["Required Experience", ", ".join(res.required_experience[:5])],
-                ["Recommended Tools", ", ".join(res.tool_recommendations)],
-            ],
-            col_widths=[2.0, 4.5],
-        )
+        add_kv("Profile", res.headline_profile)
+        add_kv("Seniority", res.seniority_level)
+        add_kv("Min Experience", f"{res.min_years_experience} Years")
+        add_kv("Education", res.education_requirement)
+        add_kv("Tools", ", ".join(res.tool_recommendations))
 
-        # ════════════════════════════════════════════════════
-        # 10. RISK MATRIX
-        # ════════════════════════════════════════════════════
-        add_colored_heading("10. Risk Matrix", level=1)
-
-        risk_rows = []
+        # 9. Risks
+        doc.add_heading("8. Risk Matrix", level=1)
         for risk in self.analysis.risks_and_mitigations:
-            risk_rows.append([
-                risk.category,
-                risk.name,
-                risk.description,
-                risk.mitigation,
-            ])
+            p = doc.add_paragraph()
+            p.add_run(f"[{risk.category}] {risk.name}: ").bold = True
+            p.add_run(risk.description)
+            p_ev = doc.add_paragraph(style='List Bullet')
+            p_ev.add_run(f"Evidence: \"{risk.evidence_from_text}\"").italic = True
 
-        if risk_rows:
-            add_simple_table(
-                ["Category", "Risk", "Description", "Mitigation"],
-                risk_rows,
-                col_widths=[1.2, 1.5, 2.0, 1.8],
-            )
-
-        # Evidence quotes
-        doc.add_heading("Risk Evidence", level=3)
-        for risk in self.analysis.risks_and_mitigations:
-            if risk.evidence_from_text:
-                p = doc.add_paragraph()
-                p.add_run(f"[{risk.name}] ").bold = True
-                run = p.add_run(f'"{risk.evidence_from_text}"')
-                run.italic = True
-                run.font.size = Pt(10)
-
-        # ════════════════════════════════════════════════════
-        # 11. WORKFLOW
-        # ════════════════════════════════════════════════════
-        add_colored_heading("11. Recommended Workflow", level=1)
+        # 10. Workflow
+        doc.add_heading("9. Workflow", level=1)
         wf = self.analysis.workflow_recommendations
-
-        workflow_rows = [
-            ["Pre-Processing", "\n".join(f"• {s}" for s in wf.pre_processing)],
-            ["Translation", str(wf.translation_process) if wf.translation_process else "Standard TEP"],
-            ["QA & Review", "\n".join(f"• {s}" for s in wf.qa_and_review)],
-            ["Post-Processing", "\n".join(f"• {s}" for s in wf.post_processing)],
-        ]
-        add_simple_table(
-            ["Phase", "Steps"],
-            workflow_rows,
-            col_widths=[1.8, 4.7],
-        )
-
-        # ════════════════════════════════════════════════════
-        # 12. PM NOTES
-        # ════════════════════════════════════════════════════
-        if self.analysis.pm_notes:
-            add_colored_heading("12. Project Manager Notes", level=1)
-            pm = self.analysis.pm_notes
-
-            if pm.special_considerations:
-                doc.add_heading("Special Considerations", level=3)
-                add_list_items(pm.special_considerations)
-
-            if pm.questions_for_client:
-                doc.add_heading("Questions for Client", level=3)
-                add_list_items(pm.questions_for_client)
-
-        # ════════════════════════════════════════════════════
-        # FOOTER
-        # ════════════════════════════════════════════════════
-        doc.add_paragraph("─" * 60).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        footer = doc.add_paragraph()
-        footer.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        run = footer.add_run(self.analysis.footnote)
-        run.italic = True
-        run.font.size = Pt(9)
-        run.font.color.rgb = RGBColor(0x9B, 0x9B, 0x9B)
-
-        attr_final = doc.add_paragraph()
-        attr_final.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        run = attr_final.add_run("Anova Translation | www.anova.bg | info@anova.bg")
-        run.font.size = Pt(8)
-        run.font.color.rgb = TEAL
-
+        add_kv("Pre-Processing", ", ".join(wf.pre_processing))
+        add_kv("Translation", str(wf.translation_process))
+        add_kv("QA", ", ".join(wf.qa_and_review))
+        add_kv("Post-Processing", ", ".join(wf.post_processing))
+        
         doc.save(file_path)
         print(f"Generated Enterprise DOCX: {file_path}")
