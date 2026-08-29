@@ -134,7 +134,7 @@ def display_dashboard(model, out_dir, original_filename):
             col2.download_button("📋 Download Data (JSON)", f, file_name=json_path.name)
 
 
-def run_analysis_pipeline(file_path: str, api_key: str, model: str = None):
+def run_analysis_pipeline(file_path: str, api_key: str, model: str = None, detail_level: str = "comprehensive"):
     """Ana analiz pipeline'ı."""
     
     # Progress UI
@@ -177,9 +177,10 @@ def run_analysis_pipeline(file_path: str, api_key: str, model: str = None):
         # Analyze
         try:
             analysis_model = llm.analyze_document(
-                chunks, 
-                extract_result, 
-                progress_callback=progress_callback
+                chunks,
+                extract_result,
+                progress_callback=progress_callback,
+                detail_level=detail_level,
             )
         except RuntimeError as e:
             st.error(f"❌ Claude API Error: {str(e)}")
@@ -287,6 +288,22 @@ with st.sidebar:
     else:
         st.caption("Enter the API key above to choose a model.")
 
+    # Detail level — controls report length and depth.
+    st.markdown("---")
+    st.markdown("### 📏 Detail Level")
+    detail_choice = st.radio(
+        "Analysis detail",
+        ["Comprehensive (~2000 words)", "Standard (~1500 words)", "Basic (~1000 words)"],
+        index=0,
+        help="All levels cover the same sections; higher levels include more terms and deeper analysis.",
+    )
+    if "Comprehensive" in detail_choice:
+        selected_detail_level = "comprehensive"
+    elif "Standard" in detail_choice:
+        selected_detail_level = "standard"
+    else:
+        selected_detail_level = "basic"
+
     st.markdown("---")
     st.info("📌 AICONTEXT - Anthropic Edition")
 
@@ -314,7 +331,7 @@ if uploaded_file:
         else:
             file_path = save_uploaded_file(uploaded_file)
             if file_path:
-                result = run_analysis_pipeline(file_path, api_key, model=selected_model)
+                result = run_analysis_pipeline(file_path, api_key, model=selected_model, detail_level=selected_detail_level)
                 if result:
                     display_dashboard(*result)
 else:
