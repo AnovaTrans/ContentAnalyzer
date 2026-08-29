@@ -72,8 +72,11 @@ def save_uploaded_file(uploaded_file):
         return None
 
 
-def display_dashboard(model, out_dir, original_filename):
-    """Analiz sonuçlarını dashboard olarak göster."""
+def display_dashboard(res):
+    """Persistent results view — renders from session_state so it (and the
+    download buttons) survive the rerun a download triggers."""
+    model = res["model"]
+    st.markdown("## 📊 Analysis Results")
     st.markdown("---")
     
     # Metrics Row
@@ -112,26 +115,20 @@ def display_dashboard(model, out_dir, original_filename):
         "Tools": [", ".join(res.tool_recommendations)]
     })
     
-    # Download Buttons - Find files with timestamp pattern
+    # Downloads — from bytes stored in session_state, so the buttons persist
+    # after a download (a plain file handle would vanish on the rerun).
     st.subheader("📥 Downloads")
-    
-    import glob
-    
-    # Find the most recent files matching the pattern
-    docx_files = sorted(glob.glob(str(out_dir / "*_analysis_report.docx")), reverse=True)
-    json_files = sorted(glob.glob(str(out_dir / "*_analysis.json")), reverse=True)
-    
     col1, col2 = st.columns(2)
-    
-    if docx_files:
-        docx_path = Path(docx_files[0])
-        with open(docx_path, "rb") as f:
-            col1.download_button("📄 Download Report (DOCX)", f, file_name=docx_path.name)
-    
-    if json_files:
-        json_path = Path(json_files[0])
-        with open(json_path, "rb") as f:
-            col2.download_button("📋 Download Data (JSON)", f, file_name=json_path.name)
+    if res.get("docx_bytes"):
+        col1.download_button(
+            "📄 Download Report (DOCX)", data=res["docx_bytes"], file_name=res["docx_name"],
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    if res.get("json_bytes"):
+        col2.download_button(
+            "📋 Download Data (JSON)", data=res["json_bytes"], file_name=res["json_name"],
+            mime="application/json",
+        )
 
 
 def run_analysis_pipeline(file_path: str, api_key: str, model: str = None, detail_level: str = "comprehensive"):
@@ -333,12 +330,28 @@ if uploaded_file:
             if file_path:
                 result = run_analysis_pipeline(file_path, api_key, model=selected_model, detail_level=selected_detail_level)
                 if result:
-                    display_dashboard(*result)
-else:
-    # Empty state
+                    import glob
+                    model, out_dir, _ = result
+                    docx_files = sorted(glob.glob(str(out_dir / "*_analysis_report.docx")), reverse=True)
+                    json_files = sorted(glob.glob(str(out_dir / "*_analysis.json")), reverse=True)
+                    # Read bytes now so the download buttons survive later reruns.
+                    st.session_state.ca_result = {
+                        "model": model,
+                        "docx_name": Path(docx_files[0]).name if docx_files else None,
+                        "docx_bytes": Path(docx_files[0]).read_bytes() if docx_files else None,
+                        "json_name": Path(json_files[0]).name if json_files else None,
+                        "json_bytes": Path(json_files[0]).read_bytes() if json_files else None,
+                    }
+elif not st.session_state.get("ca_result"):
+    # Empty state — only before the first analysis.
     st.markdown("""
     <div style="text-align: center; padding: 3rem; color: #666;">
         <h3>👆 Upload a document to get started</h3>
         <p>The analyzer will extract content, identify domains, assess complexity, and generate a comprehensive translation project report.</p>
     </div>
     """, unsafe_allow_html=True)
+
+# Persistent results — rendered from session_state so the dashboard and the
+# download buttons stay after a download triggers a rerun.
+if st.session_state.get("ca_result"):
+    display_dashboard(st.session_state.ca_result)
