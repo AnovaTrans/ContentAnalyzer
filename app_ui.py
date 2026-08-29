@@ -19,18 +19,17 @@ from reporters import ReportGenerator
 from config_data import calculate_blended_price_factor
 from models import FinancialEstimates
 
-st.set_page_config(page_title="AICONTEXT Document Analyzer", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="AICONTEXT Document Analyzer", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
 # --- GÜNCELLENMİŞ GİZLEME KODU (Fullscreen ve Footer Yok Edici) ---
 hide_streamlit_style = """
 <style>
-/* Üst menü ve standart footer gizleme */
+/* Üst menü ve standart footer gizleme.
+   NOTE: 'header' is NOT hidden — in current Streamlit the sidebar
+   collapse/expand toggle lives there; hiding it makes the sidebar
+   (API key + model selector) unreachable. */
 #MainMenu {visibility: hidden; display: none;}
 footer {visibility: hidden; display: none;}
-header {visibility: hidden; display: none;}
-
-/* Uygulama içeriğinin en tepesindeki boşluğu alma */
-.stApp > header {visibility: hidden; display: none;}
 
 /* KRİTİK GÜNCELLEME: Alt çubuk ve Fullscreen butonunu yok etme */
 /* İsimleri değişse bile 'viewerBadge' içeren tüm elementleri gizler */
