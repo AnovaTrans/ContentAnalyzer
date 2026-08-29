@@ -107,12 +107,12 @@ def display_dashboard(res):
     
     # Resource Qualifications Table
     st.markdown("### 📋 Resource Qualifications")
-    res = model.recommended_resources
+    rr = model.recommended_resources
     st.table({
-        "Profile": [res.headline_profile],
-        "Experience": [f"{res.min_years_experience} Years"],
-        "Education": [res.education_requirement],
-        "Tools": [", ".join(res.tool_recommendations)]
+        "Profile": [rr.headline_profile],
+        "Experience": [f"{rr.min_years_experience} Years"],
+        "Education": [rr.education_requirement],
+        "Tools": [", ".join(rr.tool_recommendations)]
     })
     
     # Downloads — from bytes stored in session_state, so the buttons persist
